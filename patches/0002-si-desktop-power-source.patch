@@ -1,0 +1,27 @@
+Subject: [PATCH] drm/amd/pm/si: Limit GPIO DC mode to mobile GPUs
+
+Diagnostic backport of Timur Kristof's September 23, 2026 upstream fix,
+"Check AMD_IS_MOBILITY flag for PPSMC_SYSTEMFLAG_GPIO_DC".
+
+The tested D700 GPUs are desktop devices, but their VBIOS sets HARDWAREDC
+and defines a 300/150 MHz battery state. Only enable GPIO DC mode for
+mobile GPUs, preserving the remaining power and thermal-control flags.
+
+Original patch:
+https://www.mail-archive.com/amd-gfx@lists.freedesktop.org/msg151959.html
+Maintainer review:
+https://www.mail-archive.com/amd-gfx@lists.freedesktop.org/msg152027.html
+
+---
+--- a/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c
++++ b/drivers/gpu/drm/amd/pm/legacy-dpm/si_dpm.c
+@@ -5263,7 +5263,8 @@ static int si_init_smc_table(struct amdgpu_device *adev)
+ 		break;
+ 	}
+ 
+-	if (adev->pm.dpm.platform_caps & ATOM_PP_PLATFORM_CAP_HARDWAREDC)
++	if ((adev->flags & AMD_IS_MOBILITY) &&
++	    (adev->pm.dpm.platform_caps & ATOM_PP_PLATFORM_CAP_HARDWAREDC))
+ 		table->systemFlags |= PPSMC_SYSTEMFLAG_GPIO_DC;
+ 
+ 	if (adev->pm.dpm.platform_caps & ATOM_PP_PLATFORM_CAP_REGULATOR_HOT) {

@@ -1,0 +1,89 @@
+Subject: [PATCH] drm/amdgpu: Prefer exact PCI bus matches in VFCT
+
+A relaxed match against an early VFCT entry can hide a later exact match
+when multiple GPUs have the same vendor, device, slot, and function IDs.
+On a MacPro6,1 with two FirePro D700 GPUs, this loads the bus-2 XA VBIOS
+for the bus-6 GPU even though its distinct XB image is present.
+
+Scan every entry for an exact PCI bus match before allowing the existing
+fallback for platforms whose PCI buses were renumbered.
+
+Validated the production selection functions against the machine's VFCT:
+both GPU identities, reversed entry order, unmatched device IDs, and the
+existing renumbered-bus fallback.
+
+---
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
+@@ -376,19 +376,20 @@
+  * amdgpu_acpi_vfct_match() - Check if a VFCT entry matches the device
+  * @adev: AMDGPU device
+  * @vhdr: VFCT image header to check
++ * @allow_bus_mismatch: Allow a relaxed match after checking all exact matches
+  *
+  * VFCT entries contain the PCI bus number as recorded during BIOS POST.
+  * On systems where the kernel renumbers PCI buses (e.g. pci=realloc or
+  * resource conflicts), the runtime bus number may differ from the POST
+  * value.  Match by device identity (vendor + device + function) and use
+- * the bus number as a preference: exact bus match is preferred, but when
+- * the bus numbers disagree we accept the entry if the device identity
+- * matches.
++ * the bus number as a preference. The caller first checks every entry for
++ * an exact match, then permits a relaxed match if none was found.
+  *
+  * Returns: 0 on match, -ENODEV on no match
+  */
+ static int amdgpu_acpi_vfct_match(struct amdgpu_device *adev,
+-				  VFCT_IMAGE_HEADER *vhdr)
++				  VFCT_IMAGE_HEADER *vhdr,
++				  bool allow_bus_mismatch)
+ {
+ 	/* Vendor and device IDs must always match */
+ 	if (vhdr->VendorID != adev->pdev->vendor ||
+@@ -402,6 +403,8 @@
+ 	/* Exact bus number match - preferred */
+ 	if (vhdr->PCIBus == adev->pdev->bus->number)
+ 		return 0;
++	if (!allow_bus_mismatch)
++		return -ENODEV;
+ 
+ 	/* Bus mismatch but device identity matches (PCI renumbering case) */
+ 	dev_notice(adev->dev,
+@@ -418,6 +421,7 @@
+ 	UEFI_ACPI_VFCT *vfct;
+ 	unsigned int offset;
+ 	bool r = false;
++	bool allow_bus_mismatch = false;
+ 
+ 	if (!ACPI_SUCCESS(acpi_get_table("VFCT", 1, &hdr)))
+ 		return false;
+@@ -428,6 +432,7 @@
+ 	}
+ 
+ 	vfct = (UEFI_ACPI_VFCT *)hdr;
++retry:
+ 	offset = vfct->VBIOSImageOffset;
+ 
+ 	while (offset < tbl_size) {
+@@ -447,7 +452,7 @@
+ 		}
+ 
+ 		if (vhdr->ImageLength &&
+-		    !amdgpu_acpi_vfct_match(adev, vhdr)) {
++		    !amdgpu_acpi_vfct_match(adev, vhdr, allow_bus_mismatch)) {
+ 			adev->bios = kmemdup(&vbios->VbiosContent,
+ 					     vhdr->ImageLength,
+ 					     GFP_KERNEL);
+@@ -462,6 +467,12 @@
+ 		}
+ 	}
+ 
++	/* Do not let an early relaxed match hide a later exact match. */
++	if (!allow_bus_mismatch) {
++		allow_bus_mismatch = true;
++		goto retry;
++	}
++
+ 	dev_info(adev->dev, "ACPI VFCT table present but broken (too short #2),skipping\n");
+ 
+ out:

@@ -1,0 +1,10 @@
+artifacts/
+work/
+*.ko
+*.ko.zst
+*.img
+*.rom
+*.bin
+*.log
+*.tar.*
+.DS_Store

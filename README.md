@@ -20,7 +20,7 @@ The power-state change is a backport of **Timur Kristóf's September 23, 2026 up
 
 That is about **2.75× more frames in this diagnostic workload**, not a promise about every game. Peak observed GPU temperature was 79°C during the short test. Automatic mode and idle recovery were verified; no new GPU errors were observed.
 
-Validated runtime: Bazzite 44.20260921, `7.2.4-ogc3.1.fc44.x86_64`, Mesa 26.2.2. Managed Bazzite persistence has also booted successfully. The Omarchy `7.2.5-3-omarchy` module builds successfully with matching identity and dependencies; installation and runtime validation are pending.
+Validated runtime: Bazzite 44.20260921, `7.2.4-ogc3.1.fc44.x86_64`, Mesa 26.2.2. Managed Bazzite persistence has also booted successfully. On Omarchy `7.2.5-3-omarchy`, the module is installed and verified inside the regenerated UKI, with a separate stock-image fallback. Runtime validation is pending an approved reboot.
 
 ## Use
 
